@@ -1,0 +1,75 @@
+#!/bin/bash
+# Snap-App: Zero-overhead agentic screenshot tool for coding agents (Antigravity, Claude Code, Codex, Cursor)
+
+SNAP_DIR="/tmp/agent-snaps"
+mkdir -p "$SNAP_DIR"
+
+# Cleanup old screenshots, keep only latest 5
+ls -t "$SNAP_DIR"/app-state-*.png 2>/dev/null | tail -n +6 | xargs -I {} rm -f "{}" 2>/dev/null
+
+SNAP_FILE="$SNAP_DIR/app-state-$(date +%s).png"
+
+# Countdown so user can focus app window
+echo "⚠️  AGENT IS TAKING A SCREENSHOT" >&2
+echo "Please switch to your app window NOW. Capturing in 3 seconds..." >&2
+sleep 1
+echo "2..." >&2
+sleep 1
+echo "1..." >&2
+sleep 1
+
+capture_success=false
+
+# 1. macOS screencapture
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if command -v screencapture >/dev/null 2>&1; then
+        screencapture -x "$SNAP_FILE" && capture_success=true
+    fi
+# 2. Linux Wayland
+elif [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    if command -v grim >/dev/null 2>&1; then
+        grim "$SNAP_FILE" && capture_success=true
+    fi
+# 3. Linux X11 or fallback
+else
+    # Try active window with xdotool + import/maim/scrot
+    if command -v xdotool >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+        active_win=$(xdotool getactivewindow 2>/dev/null)
+        if [ -n "$active_win" ]; then
+            if command -v import >/dev/null 2>&1; then
+                import -window "$active_win" "$SNAP_FILE" 2>/dev/null && capture_success=true
+            elif command -v maim >/dev/null 2>&1; then
+                maim -i "$active_win" "$SNAP_FILE" 2>/dev/null && capture_success=true
+            fi
+        fi
+    fi
+
+    # Fallback to full screen if active window capture failed
+    if [ "$capture_success" = false ]; then
+        if command -v import >/dev/null 2>&1; then
+            import -window root "$SNAP_FILE" 2>/dev/null && capture_success=true
+        elif command -v scrot >/dev/null 2>&1; then
+            scrot "$SNAP_FILE" 2>/dev/null && capture_success=true
+        elif command -v maim >/dev/null 2>&1; then
+            maim "$SNAP_FILE" 2>/dev/null && capture_success=true
+        fi
+    fi
+fi
+
+if [ "$capture_success" = true ] && [ -f "$SNAP_FILE" ]; then
+    # Also copy to clipboard if available
+    if command -v xclip >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
+        echo -n "$SNAP_FILE" | xclip -selection clipboard 2>/dev/null
+    elif command -v wl-copy >/dev/null 2>&1; then
+        echo -n "$SNAP_FILE" | wl-copy 2>/dev/null
+    elif command -v pbcopy >/dev/null 2>&1; then
+        echo -n "$SNAP_FILE" | pbcopy 2>/dev/null
+    fi
+
+    # Output ONLY the file path to stdout for the agent to consume
+    echo "$SNAP_FILE"
+    exit 0
+else
+    echo "ERROR: Failed to capture screenshot. Make sure imagemagick (import), scrot, maim, or grim is installed." >&2
+    exit 1
+fi
