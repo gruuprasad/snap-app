@@ -9,20 +9,20 @@ description: >-
 
 ## When to use this skill:
 - **Non-web applications**: Native GUI apps (Electron, Flutter, Tauri, Qt, GTK), Mobile Simulators (Android Emulator, iOS Simulator), Terminal TUIs, or native desktop tools.
-- **Specific window inspections**: When explicitly instructed by the user to look at a specific desktop window.
+- **Specific window inspections**: When instructed by the user to look at a desktop window.
 
-> ⚠️ **CRITICAL RULE FOR WEB APPS:**  
-> If the task is for a web application running on a local dev server (localhost), **DO NOT USE THIS SKILL**. Use the **Playwright skill** instead, which connects directly and deterministically to the target URL.
+> ⚠️ **FOR WEB APPS:** If the app is running on a local dev server (localhost), **USE PLAYWRIGHT** instead.
 
-## How to use:
-1. Always pass a target window hint or app name to avoid capturing the wrong window:
+## How it works (Set-Once & Passive Memory):
+1. **Targeting**: When you first run `snap-app`, provide the user's app window title or keyword:
    ```bash
-   snap-app --app "<app_name_or_keyword>"
+   snap-app "Android Emulator"
+   # or
+   snap-app "Figma"
    ```
-   Examples:
-   - `snap-app --app "Android Emulator"`
-   - `snap-app --app "Figma"`
-   - `snap-app --app "Calculator"`
-
-2. The tool captures the specified window directly from the compositor buffer in the background without stealing focus or disrupting the user.
-3. Read the output `.png` filepath to inspect the visual state.
+2. **Subsequent captures**: `snap-app` automatically remembers the designated target window for the rest of the session. Subsequent calls can simply be:
+   ```bash
+   snap-app
+   ```
+3. The tool captures silently in the background from the compositor buffer with zero window switching or disruption.
+4. Read the output `.png` filepath to inspect the visual state.

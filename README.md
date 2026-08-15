@@ -14,33 +14,28 @@ Designed specifically for **non-web desktop applications, emulators, and native 
 curl -fsSL https://raw.githubusercontent.com/gruuprasad/snap-app/main/install.sh | bash
 ```
 
-### 📦 Auto-configured across:
-- **Google Antigravity (AGY)**: `~/.gemini/config/skills/snap-app/SKILL.md`
-- **Claude Code**: `~/.claude/skills/snap-app/SKILL.md`
-- **Codex**: `~/.codex/skills/snap-app/SKILL.md`
-- **Cursor**: `~/.cursor/skills-cursor/snap-app/SKILL.md`
-- **Shared Agents**: `~/.agents/skills/snap-app/SKILL.md`
-
 ---
 
-## 🎯 Targeted Usage with Window Hints
+## 🧠 "Set Once & Passive Memory" Workflow
 
-Agents or users can provide a window hint to guarantee the correct application is captured:
+`snap-app` is completely passive and avoids guessing:
 
-```bash
-# Snap by app keyword or title
-snap-app "Android Emulator"
-snap-app "Figma"
-snap-app "Calculator"
+1. **Set target window once:**
+   ```bash
+   snap-app "Android Emulator"
+   # or
+   snap-app "Figma"
+   ```
+2. **Subsequent captures are passive:**
+   ```bash
+   snap-app
+   ```
+   `snap-app` automatically remembers the designated target window for the session and captures it silently in the background from the compositor buffer without stealing focus.
 
-# List available windows
-snap-app --list
-```
-
-### Key Features:
-- **Silent Background Capture**: Reads directly from compositor memory without raising or focusing windows.
-- **Zero Disruptions**: You can continue typing in your terminal while the agent snaps the window.
-- **Safe Fallback**: If a hint doesn't match, it lists available windows rather than blindly hallucinating.
+3. **Clear target:**
+   ```bash
+   snap-app --clear
+   ```
 
 ---
 

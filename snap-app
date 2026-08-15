@@ -7,6 +7,7 @@ import argparse
 
 SNAP_DIR = "/tmp/agent-snaps"
 os.makedirs(SNAP_DIR, exist_ok=True)
+TARGET_CACHE_FILE = os.path.join(SNAP_DIR, "target_window")
 
 # Cleanup old snapshots, keep only latest 5
 try:
@@ -21,11 +22,6 @@ except Exception:
     pass
 
 SNAP_FILE = os.path.join(SNAP_DIR, f"app-state-{int(time.time())}.png")
-
-TERMINAL_KEYWORDS = [
-    "alacritty", "terminal", "kitty", "terminator", "tmux", "bash", "zsh", "fish",
-    "xterm", "gnome-terminal", "konsole", "wezterm", "st", "urxvt", "antigravity", "code", "cursor"
-]
 
 def get_x11_windows():
     wins = []
@@ -48,38 +44,48 @@ def find_target_window(app_query=None):
     if not wins:
         return None
 
+    # 1. Use explicit query if provided
     if app_query:
         query_lower = app_query.lower()
-        # Direct search
         matches = [(wid, name) for wid, name in wins if query_lower in name.lower()]
         if matches:
+            # Save as active session target
+            try:
+                with open(TARGET_CACHE_FILE, "w") as f:
+                    f.write(app_query)
+            except Exception:
+                pass
             return matches[-1]
+        
         print(f"⚠️  No window matching '{app_query}' found. Available windows:", file=sys.stderr)
         for wid, name in wins:
             print(f"   • {name}", file=sys.stderr)
         return None
 
-    # If no hint provided, filter out terminals and pick most recent non-terminal window
-    non_terminals = [(wid, name) for wid, name in reversed(wins) if not any(kw in name.lower() for kw in TERMINAL_KEYWORDS)]
-    if non_terminals:
-        return non_terminals[0]
+    # 2. Check cached target from previous run
+    if os.path.exists(TARGET_CACHE_FILE):
+        try:
+            with open(TARGET_CACHE_FILE, "r") as f:
+                cached_query = f.read().strip().lower()
+            if cached_query:
+                matches = [(wid, name) for wid, name in wins if cached_query in name.lower()]
+                if matches:
+                    return matches[-1]
+        except Exception:
+            pass
 
-    return wins[-1] if wins else None
+    # 3. If no target specified and no valid cache, prompt for target
+    print("ℹ️  No target window set. Specify a target window once (e.g. `snap-app \"Emulator\"` or `snap-app \"Firefox\"`).", file=sys.stderr)
+    print("Available open windows:", file=sys.stderr)
+    for wid, name in wins:
+        print(f"   • {name}", file=sys.stderr)
+    return None
 
 def capture_x11_silent(target_win=None):
     if target_win:
         wid, name = target_win
-        print(f"📸 Snapping window: {name}", file=sys.stderr)
+        print(f"📸 Snapping target window: {name}", file=sys.stderr)
         subprocess.run(["import", "-window", wid, SNAP_FILE], check=True)
-        return True
-    else:
-        subprocess.run(["import", "-window", "root", SNAP_FILE], check=True)
-        return True
-
-def capture_macos_silent(app_query=None):
-    if sys.platform == "darwin":
-        cmd = ["screencapture", "-x", SNAP_FILE]
-        subprocess.run(cmd, check=True)
         return True
     return False
 
@@ -95,11 +101,18 @@ def copy_to_clipboard(file_path):
         pass
 
 def main():
-    parser = argparse.ArgumentParser(description="Targeted background window screenshot tool for AI agents")
+    parser = argparse.ArgumentParser(description="Passive targeted background window screenshot tool for AI agents")
     parser.add_argument("target_hint", nargs="?", help="Optional app name or window title hint (e.g. 'Firefox', 'Emulator')")
     parser.add_argument("--app", "-a", help="Specific app/window title to snap")
     parser.add_argument("--list", "-l", action="store_true", help="List available windows")
+    parser.add_argument("--clear", "-c", action="store_true", help="Clear the remembered target window")
     args = parser.parse_args()
+
+    if args.clear:
+        if os.path.exists(TARGET_CACHE_FILE):
+            os.remove(TARGET_CACHE_FILE)
+            print("Cleared remembered target window.", file=sys.stderr)
+        return
 
     if args.list:
         wins = get_x11_windows()
@@ -111,18 +124,10 @@ def main():
     query = args.app or args.target_hint
     target = find_target_window(query)
 
-    if query and not target:
+    if not target:
         sys.exit(1)
 
-    success = False
-    try:
-        if sys.platform == "darwin":
-            success = capture_macos_silent(query)
-        else:
-            success = capture_x11_silent(target)
-    except Exception as e:
-        print(f"Capture error: {e}", file=sys.stderr)
-        success = False
+    success = capture_x11_silent(target)
 
     if success and os.path.exists(SNAP_FILE):
         copy_to_clipboard(SNAP_FILE)
