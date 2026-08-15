@@ -2,35 +2,41 @@
 import sys
 import os
 import time
+import hashlib
 import subprocess
 import argparse
 
 SNAP_DIR = "/tmp/agent-snaps"
 os.makedirs(SNAP_DIR, exist_ok=True)
-TARGET_CACHE_FILE = os.path.join(SNAP_DIR, "target_window")
 
-# Cleanup old snapshots, keep only latest 5
+# Generate unique session cache scoped to Current Working Directory (Project workspace)
+cwd = os.path.realpath(os.getcwd())
+cwd_hash = hashlib.md5(cwd.encode()).hexdigest()[:10]
+TARGET_CACHE_FILE = os.path.join(SNAP_DIR, f"target_{cwd_hash}")
+
+# Cleanup old snapshots, keep latest 10
 try:
     files = sorted(
         [os.path.join(SNAP_DIR, f) for f in os.listdir(SNAP_DIR) if f.startswith("app-state-") and f.endswith(".png")],
         key=os.path.getmtime,
         reverse=True
     )
-    for f in files[5:]:
+    for f in files[10:]:
         os.remove(f)
 except Exception:
     pass
 
-SNAP_FILE = os.path.join(SNAP_DIR, f"app-state-{int(time.time())}.png")
+# Unique filename with millisecond timestamp + PID to ensure concurrent multi-session safety
+SNAP_FILE = os.path.join(SNAP_DIR, f"app-state-{int(time.time()*1000)}-{os.getpid()}.png")
 
 def get_x11_windows():
     wins = []
     try:
-        raw = subprocess.check_output(["xprop", "-root", "_NET_CLIENT_LIST"], stderr=subprocess.DEVNULL).decode()
+        raw = subprocess.check_output(["xprop", "-root", "_NET_CLIENT_LIST"], stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).decode()
         ids = [w.strip() for w in raw.split("#")[1].split(",") if w.strip()]
         for wid in ids:
             try:
-                name = subprocess.check_output(["xdotool", "getwindowname", wid], stderr=subprocess.DEVNULL).decode().strip()
+                name = subprocess.check_output(["xdotool", "getwindowname", wid], stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).decode().strip()
                 if name:
                     wins.append((wid, name))
             except Exception:
@@ -44,12 +50,11 @@ def find_target_window(app_query=None):
     if not wins:
         return None
 
-    # 1. Use explicit query if provided
+    # 1. Explicit query provided
     if app_query:
         query_lower = app_query.lower()
         matches = [(wid, name) for wid, name in wins if query_lower in name.lower()]
         if matches:
-            # Save as active session target
             try:
                 with open(TARGET_CACHE_FILE, "w") as f:
                     f.write(app_query)
@@ -62,7 +67,7 @@ def find_target_window(app_query=None):
             print(f"   • {name}", file=sys.stderr)
         return None
 
-    # 2. Check cached target from previous run
+    # 2. Check workspace-specific session target cache
     if os.path.exists(TARGET_CACHE_FILE):
         try:
             with open(TARGET_CACHE_FILE, "r") as f:
@@ -74,8 +79,9 @@ def find_target_window(app_query=None):
         except Exception:
             pass
 
-    # 3. If no target specified and no valid cache, prompt for target
-    print("ℹ️  No target window set. Specify a target window once (e.g. `snap-app \"Emulator\"` or `snap-app \"Firefox\"`).", file=sys.stderr)
+    # 3. Prompt for target if nothing set in this workspace
+    print(f"ℹ️  No target window set for this workspace ({cwd}).", file=sys.stderr)
+    print("Specify a target window once (e.g. `snap-app \"Emulator\"` or `snap-app \"Firefox\"`).", file=sys.stderr)
     print("Available open windows:", file=sys.stderr)
     for wid, name in wins:
         print(f"   • {name}", file=sys.stderr)
@@ -85,33 +91,33 @@ def capture_x11_silent(target_win=None):
     if target_win:
         wid, name = target_win
         print(f"📸 Snapping target window: {name}", file=sys.stderr)
-        subprocess.run(["import", "-window", wid, SNAP_FILE], check=True)
+        subprocess.run(["import", "-window", wid, SNAP_FILE], check=True, stdin=subprocess.DEVNULL)
         return True
     return False
 
 def copy_to_clipboard(file_path):
     try:
-        if subprocess.run(["which", "xclip"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            subprocess.run(["xclip", "-selection", "clipboard"], input=file_path.encode(), stderr=subprocess.DEVNULL)
-        elif subprocess.run(["which", "wl-copy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            subprocess.run(["wl-copy"], input=file_path.encode(), stderr=subprocess.DEVNULL)
-        elif subprocess.run(["which", "pbcopy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
-            subprocess.run(["pbcopy"], input=file_path.encode(), stderr=subprocess.DEVNULL)
+        if subprocess.run(["which", "xclip"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["xclip", "-selection", "clipboard"], input=file_path.encode(), stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        elif subprocess.run(["which", "wl-copy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["wl-copy"], input=file_path.encode(), stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        elif subprocess.run(["which", "pbcopy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["pbcopy"], input=file_path.encode(), stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     except Exception:
         pass
 
 def main():
-    parser = argparse.ArgumentParser(description="Passive targeted background window screenshot tool for AI agents")
+    parser = argparse.ArgumentParser(description="Multi-session isolated passive screenshot tool for AI agents")
     parser.add_argument("target_hint", nargs="?", help="Optional app name or window title hint (e.g. 'Firefox', 'Emulator')")
     parser.add_argument("--app", "-a", help="Specific app/window title to snap")
     parser.add_argument("--list", "-l", action="store_true", help="List available windows")
-    parser.add_argument("--clear", "-c", action="store_true", help="Clear the remembered target window")
+    parser.add_argument("--clear", "-c", action="store_true", help="Clear the remembered target window for this workspace")
     args = parser.parse_args()
 
     if args.clear:
         if os.path.exists(TARGET_CACHE_FILE):
             os.remove(TARGET_CACHE_FILE)
-            print("Cleared remembered target window.", file=sys.stderr)
+            print(f"Cleared remembered target window for workspace: {cwd}", file=sys.stderr)
         return
 
     if args.list:
