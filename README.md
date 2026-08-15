@@ -2,7 +2,7 @@
 
 A lightweight, zero-overhead agentic screenshot tool designed for AI coding agents (**Antigravity**, **Claude Code**, **Codex**, **Cursor**).
 
-Empowers your terminal agents to autonomously capture and inspect your application's visual state on demand—without tedious region selections, manual copy-pasting, or heavy MCP server setups.
+Empowers your terminal and IDE agents to autonomously capture and inspect your application's visual state on demand—without tedious region selections, manual copy-pasting, or heavy MCP server setups.
 
 ---
 
@@ -14,9 +14,13 @@ Run this command in your terminal:
 curl -fsSL https://raw.githubusercontent.com/gruuprasad/snap-app/main/install.sh | bash
 ```
 
-This single step:
+### 📦 What this single step does automatically:
 1. Installs the `snap-app` executable into `~/.local/bin/`
-2. Automatically registers the global skill for **Google Antigravity (AGY)** at `~/.gemini/config/skills/snap-app/SKILL.md`
+2. Configures the global skill for **Google Antigravity (AGY)** (`~/.gemini/config/skills/snap-app/SKILL.md`)
+3. Configures the global skill for **Claude Code** (`~/.claude/skills/snap-app/SKILL.md`)
+4. Configures the global skill for **Codex** (`~/.codex/skills/snap-app/SKILL.md`)
+5. Configures the global skill for **Cursor** (`~/.cursor/skills-cursor/snap-app/SKILL.md`)
+6. Configures the shared agents directory (`~/.agents/skills/snap-app/SKILL.md`)
 
 *(Make sure `~/.local/bin` is in your `$PATH`)*
 
@@ -25,36 +29,12 @@ This single step:
 ## 🧠 How It Works
 
 Instead of configuring complex MCP daemons or servers:
-1. You say to the agent: **"Look at the app and check the navbar spacing"**
+1. In **any** of your agents (Antigravity, Claude, Codex, Cursor), simply say:  
+   **"Look at the app and check the navbar spacing"**
 2. The agent executes `snap-app` in the background.
 3. The script announces a 3-second countdown on `stderr` (giving you time to focus your app window).
 4. It snaps the active window, saves it to a temporary location (`/tmp/agent-snaps/`), and prints the file path on `stdout`.
 5. The agent reads the generated image using its native file-viewing tools and immediately analyzes the visual state.
-
----
-
-## 🤖 Setup for Other AI Agents
-
-### Antigravity (AGY)
-> **Zero configuration needed!** The install script automatically installs the global skill. Just ask: `"Look at the app"`
-
-### Claude Code
-Add this snippet to your project's `CLAUDE.md` or `.claudecode`:
-
-```markdown
-### Visual Inspection / Screenshots
-When you need to visually check the application UI:
-1. Run the terminal command `snap-app`
-2. The script gives the user a 3-second countdown to switch to the app window.
-3. Read the PNG image path returned on stdout to inspect the visual state.
-```
-
-### Cursor / Windsurf
-Add this snippet to `.cursorrules`:
-
-```markdown
-If you need to verify UI visually, run `snap-app` in the terminal. Read the output PNG file path to inspect the screenshot.
-```
 
 ---
 
