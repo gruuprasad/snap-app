@@ -50,39 +50,35 @@ def find_target_window(app_query=None):
 
     if app_query:
         query_lower = app_query.lower()
-        for wid, name in reversed(wins):
-            if query_lower in name.lower():
-                return (wid, name)
+        # Direct search
+        matches = [(wid, name) for wid, name in wins if query_lower in name.lower()]
+        if matches:
+            return matches[-1]
+        print(f"⚠️  No window matching '{app_query}' found. Available windows:", file=sys.stderr)
+        for wid, name in wins:
+            print(f"   • {name}", file=sys.stderr)
+        return None
 
-    # Pick the most recent application window (browser, simulator, desktop app) ignoring terminals/editors
-    for wid, name in reversed(wins):
-        name_lower = name.lower()
-        if not any(kw in name_lower for kw in TERMINAL_KEYWORDS):
-            return (wid, name)
+    # If no hint provided, filter out terminals and pick most recent non-terminal window
+    non_terminals = [(wid, name) for wid, name in reversed(wins) if not any(kw in name.lower() for kw in TERMINAL_KEYWORDS)]
+    if non_terminals:
+        return non_terminals[0]
 
     return wins[-1] if wins else None
 
 def capture_x11_silent(target_win=None):
-    """
-    Captures directly from the compositor's window pixmap buffer.
-    ZERO window switching, ZERO focus changes, ZERO disruption.
-    """
     if target_win:
         wid, name = target_win
-        # Capture the window buffer directly by ID without activating or raising it
+        print(f"📸 Snapping window: {name}", file=sys.stderr)
         subprocess.run(["import", "-window", wid, SNAP_FILE], check=True)
         return True
     else:
         subprocess.run(["import", "-window", "root", SNAP_FILE], check=True)
         return True
 
-def capture_macos_silent(window_id=None):
-    # macOS screencapture with -l <windowid> captures window directly in background
+def capture_macos_silent(app_query=None):
     if sys.platform == "darwin":
-        cmd = ["screencapture", "-x"]
-        if window_id:
-            cmd.extend(["-l", str(window_id)])
-        cmd.append(SNAP_FILE)
+        cmd = ["screencapture", "-x", SNAP_FILE]
         subprocess.run(cmd, check=True)
         return True
     return False
@@ -99,8 +95,9 @@ def copy_to_clipboard(file_path):
         pass
 
 def main():
-    parser = argparse.ArgumentParser(description="Completely silent background screenshot tool for AI agents")
-    parser.add_argument("--app", "-a", help="Specific app/window title to snap (e.g. 'chrome', 'firefox')")
+    parser = argparse.ArgumentParser(description="Targeted background window screenshot tool for AI agents")
+    parser.add_argument("target_hint", nargs="?", help="Optional app name or window title hint (e.g. 'Firefox', 'Emulator')")
+    parser.add_argument("--app", "-a", help="Specific app/window title to snap")
     parser.add_argument("--list", "-l", action="store_true", help="List available windows")
     args = parser.parse_args()
 
@@ -111,20 +108,21 @@ def main():
             print(f"  {wid}: {name}")
         return
 
-    success = False
-    target = find_target_window(args.app)
+    query = args.app or args.target_hint
+    target = find_target_window(query)
 
+    if query and not target:
+        sys.exit(1)
+
+    success = False
     try:
         if sys.platform == "darwin":
-            success = capture_macos_silent()
+            success = capture_macos_silent(query)
         else:
             success = capture_x11_silent(target)
     except Exception as e:
-        try:
-            subprocess.run(["import", "-window", "root", SNAP_FILE], check=True)
-            success = True
-        except Exception:
-            success = False
+        print(f"Capture error: {e}", file=sys.stderr)
+        success = False
 
     if success and os.path.exists(SNAP_FILE):
         copy_to_clipboard(SNAP_FILE)
@@ -132,7 +130,7 @@ def main():
         print(SNAP_FILE)
         sys.exit(0)
     else:
-        print("ERROR: Failed to capture background window buffer.", file=sys.stderr)
+        print("ERROR: Failed to capture target window.", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -1,61 +1,46 @@
 # snap-app 📸
 
-A lightweight, zero-overhead agentic screenshot tool designed for AI coding agents (**Antigravity**, **Claude Code**, **Codex**, **Cursor**).
+A lightweight, zero-overhead targeted screenshot tool for AI coding agents (**Antigravity**, **Claude Code**, **Codex**, **Cursor**).
 
-Empowers your terminal and IDE agents to autonomously capture and inspect your application's visual state on demand—**without countdowns, manual window switching, or user intervention**.
+Designed specifically for **non-web desktop applications, emulators, and native GUI windows** without stealing window focus, disrupting your work, or requiring MCP servers.
+
+> 💡 **For Web Applications:** AI agents should always prioritize **Playwright / browser automation** for deterministic URL/port-level verification. Use `snap-app` for desktop apps, mobile emulators, or specific window targets.
 
 ---
 
 ## ⚡ 1-Line Quick Install
 
-Run this command in your terminal:
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gruuprasad/snap-app/main/install.sh | bash
 ```
 
-### 📦 What this single step does automatically:
-1. Installs the `snap-app` executable into `~/.local/bin/`
-2. Configures the global skill for **Google Antigravity (AGY)** (`~/.gemini/config/skills/snap-app/SKILL.md`)
-3. Configures the global skill for **Claude Code** (`~/.claude/skills/snap-app/SKILL.md`)
-4. Configures the global skill for **Codex** (`~/.codex/skills/snap-app/SKILL.md`)
-5. Configures the global skill for **Cursor** (`~/.cursor/skills-cursor/snap-app/SKILL.md`)
-6. Configures the shared agents directory (`~/.agents/skills/snap-app/SKILL.md`)
-
-*(Make sure `~/.local/bin` is in your `$PATH`)*
+### 📦 Auto-configured across:
+- **Google Antigravity (AGY)**: `~/.gemini/config/skills/snap-app/SKILL.md`
+- **Claude Code**: `~/.claude/skills/snap-app/SKILL.md`
+- **Codex**: `~/.codex/skills/snap-app/SKILL.md`
+- **Cursor**: `~/.cursor/skills-cursor/snap-app/SKILL.md`
+- **Shared Agents**: `~/.agents/skills/snap-app/SKILL.md`
 
 ---
 
-## 🧠 Truly Autonomous (Zero User Interaction Required)
+## 🎯 Targeted Usage with Window Hints
 
-Unlike traditional screenshot tools that require you to watch a countdown and manually Alt-Tab:
-1. You say to the agent: **"Look at the app and check the navbar spacing"**
-2. The agent executes `snap-app`.
-3. `snap-app` **auto-detects the app/browser window**, focuses it, captures the screenshot, and **instantly restores focus back to your terminal/IDE in ~0.2s**.
-4. The agent reads the generated image path and analyzes the visual state immediately.
+Agents or users can provide a window hint to guarantee the correct application is captured:
 
-You don't need to be alert or switch windows.
-
----
-
-## 🛠️ System Prerequisites
-
-`snap-app` automatically detects your platform:
-- **Linux (X11)**: Uses `xdotool` + `import` (ImageMagick) or `maim` / `scrot`.
-- **Linux (Wayland)**: Uses `grim`.
-- **macOS**: Uses native `screencapture`.
-
-### Linux Dependencies
 ```bash
-# Ubuntu / Debian
-sudo apt install imagemagick xdotool xclip
+# Snap by app keyword or title
+snap-app "Android Emulator"
+snap-app "Figma"
+snap-app "Calculator"
 
-# Arch Linux
-sudo pacman -S imagemagick xdotool xclip
-
-# Fedora
-sudo dnf install ImageMagick xdotool xclip
+# List available windows
+snap-app --list
 ```
+
+### Key Features:
+- **Silent Background Capture**: Reads directly from compositor memory without raising or focusing windows.
+- **Zero Disruptions**: You can continue typing in your terminal while the agent snaps the window.
+- **Safe Fallback**: If a hint doesn't match, it lists available windows rather than blindly hallucinating.
 
 ---
 

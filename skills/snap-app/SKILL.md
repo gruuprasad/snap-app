@@ -1,17 +1,28 @@
 ---
 name: snap-app
 description: >-
-  Use this skill when you need to see the current visual state of the user's application, UI, or browser.
-  This allows you to take screenshots autonomously without the user needing to manually switch windows or upload files.
+  Use this skill to visually inspect non-web desktop apps, emulators, or specific native windows.
+  For web development, ALWAYS prefer the Playwright skill instead.
 ---
 
-# Taking an App Screenshot
+# Snap-App (Targeted Desktop & Window Capture)
 
-When you need to see the visual state of the application to verify UI, layout, design, or check for errors:
+## When to use this skill:
+- **Non-web applications**: Native GUI apps (Electron, Flutter, Tauri, Qt, GTK), Mobile Simulators (Android Emulator, iOS Simulator), Terminal TUIs, or native desktop tools.
+- **Specific window inspections**: When explicitly instructed by the user to look at a specific desktop window.
 
-1. Run the terminal command: `snap-app` (or `snap-app --app <name>` if targeting a specific browser or app window).
-2. The tool autonomously auto-detects the user's app window, focuses it, snaps the screen, and restores focus back to the terminal in ~0.2s without requiring any user intervention or manual window switching.
-3. Read the `.png` file path returned on stdout using your file viewing tool.
-4. Analyze the image and proceed with your task.
+> ⚠️ **CRITICAL RULE FOR WEB APPS:**  
+> If the task is for a web application running on a local dev server (localhost), **DO NOT USE THIS SKILL**. Use the **Playwright skill** instead, which connects directly and deterministically to the target URL.
 
-Do not ask the user for permission to take a screenshot if they have asked you to look at the app. Just run `snap-app`.
+## How to use:
+1. Always pass a target window hint or app name to avoid capturing the wrong window:
+   ```bash
+   snap-app --app "<app_name_or_keyword>"
+   ```
+   Examples:
+   - `snap-app --app "Android Emulator"`
+   - `snap-app --app "Figma"`
+   - `snap-app --app "Calculator"`
+
+2. The tool captures the specified window directly from the compositor buffer in the background without stealing focus or disrupting the user.
+3. Read the output `.png` filepath to inspect the visual state.
