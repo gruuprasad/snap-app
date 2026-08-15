@@ -1,75 +1,160 @@
-#!/bin/bash
-# Snap-App: Zero-overhead agentic screenshot tool for coding agents (Antigravity, Claude Code, Codex, Cursor)
+#!/usr/bin/env python3
+import sys
+import os
+import time
+import subprocess
+import argparse
+from datetime import datetime
 
-SNAP_DIR="/tmp/agent-snaps"
-mkdir -p "$SNAP_DIR"
+SNAP_DIR = "/tmp/agent-snaps"
+os.makedirs(SNAP_DIR, exist_ok=True)
 
-# Cleanup old screenshots, keep only latest 5
-ls -t "$SNAP_DIR"/app-state-*.png 2>/dev/null | tail -n +6 | xargs -I {} rm -f "{}" 2>/dev/null
+# Cleanup old snapshots, keep only latest 5
+try:
+    files = sorted(
+        [os.path.join(SNAP_DIR, f) for f in os.listdir(SNAP_DIR) if f.startswith("app-state-") and f.endswith(".png")],
+        key=os.path.getmtime,
+        reverse=True
+    )
+    for f in files[5:]:
+        os.remove(f)
+except Exception:
+    pass
 
-SNAP_FILE="$SNAP_DIR/app-state-$(date +%s).png"
+SNAP_FILE = os.path.join(SNAP_DIR, f"app-state-{int(time.time())}.png")
 
-# Countdown so user can focus app window
-echo "⚠️  AGENT IS TAKING A SCREENSHOT" >&2
-echo "Please switch to your app window NOW. Capturing in 3 seconds..." >&2
-sleep 1
-echo "2..." >&2
-sleep 1
-echo "1..." >&2
-sleep 1
+TERMINAL_KEYWORDS = [
+    "alacritty", "terminal", "kitty", "terminator", "tmux", "bash", "zsh", "fish",
+    "xterm", "gnome-terminal", "konsole", "wezterm", "st", "urxvt", "antigravity"
+]
 
-capture_success=false
+def get_x11_windows():
+    wins = []
+    try:
+        raw = subprocess.check_output(["xprop", "-root", "_NET_CLIENT_LIST"], stderr=subprocess.DEVNULL).decode()
+        ids = [w.strip() for w in raw.split("#")[1].split(",") if w.strip()]
+        for wid in ids:
+            try:
+                name = subprocess.check_output(["xdotool", "getwindowname", wid], stderr=subprocess.DEVNULL).decode().strip()
+                if name:
+                    wins.append((wid, name))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return wins
 
-# 1. macOS screencapture
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    if command -v screencapture >/dev/null 2>&1; then
-        screencapture -x "$SNAP_FILE" && capture_success=true
-    fi
-# 2. Linux Wayland
-elif [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
-    if command -v grim >/dev/null 2>&1; then
-        grim "$SNAP_FILE" && capture_success=true
-    fi
-# 3. Linux X11 or fallback
-else
-    # Try active window with xdotool + import/maim/scrot
-    if command -v xdotool >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-        active_win=$(xdotool getactivewindow 2>/dev/null)
-        if [ -n "$active_win" ]; then
-            if command -v import >/dev/null 2>&1; then
-                import -window "$active_win" "$SNAP_FILE" 2>/dev/null && capture_success=true
-            elif command -v maim >/dev/null 2>&1; then
-                maim -i "$active_win" "$SNAP_FILE" 2>/dev/null && capture_success=true
-            fi
-        fi
-    fi
+def find_target_window(app_query=None):
+    wins = get_x11_windows()
+    if not wins:
+        return None
 
-    # Fallback to full screen if active window capture failed
-    if [ "$capture_success" = false ]; then
-        if command -v import >/dev/null 2>&1; then
-            import -window root "$SNAP_FILE" 2>/dev/null && capture_success=true
-        elif command -v scrot >/dev/null 2>&1; then
-            scrot "$SNAP_FILE" 2>/dev/null && capture_success=true
-        elif command -v maim >/dev/null 2>&1; then
-            maim "$SNAP_FILE" 2>/dev/null && capture_success=true
-        fi
-    fi
-fi
+    if app_query:
+        query_lower = app_query.lower()
+        for wid, name in reversed(wins):
+            if query_lower in name.lower():
+                return (wid, name)
 
-if [ "$capture_success" = true ] && [ -f "$SNAP_FILE" ]; then
-    # Also copy to clipboard if available
-    if command -v xclip >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
-        echo -n "$SNAP_FILE" | xclip -selection clipboard 2>/dev/null
-    elif command -v wl-copy >/dev/null 2>&1; then
-        echo -n "$SNAP_FILE" | wl-copy 2>/dev/null
-    elif command -v pbcopy >/dev/null 2>&1; then
-        echo -n "$SNAP_FILE" | pbcopy 2>/dev/null
-    fi
+    # Auto-detection: Pick most recent window that is NOT a terminal
+    for wid, name in reversed(wins):
+        name_lower = name.lower()
+        if not any(kw in name_lower for kw in TERMINAL_KEYWORDS):
+            return (wid, name)
 
-    # Output ONLY the file path to stdout for the agent to consume
-    echo "$SNAP_FILE"
-    exit 0
-else
-    echo "ERROR: Failed to capture screenshot. Make sure imagemagick (import), scrot, maim, or grim is installed." >&2
-    exit 1
-fi
+    return wins[-1] if wins else None
+
+def capture_x11(target_win=None):
+    orig_win = None
+    try:
+        orig_win = subprocess.check_output(["xdotool", "getactivewindow"], stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        pass
+
+    if target_win:
+        wid, name = target_win
+        print(f"🎯 Auto-focusing target window: {name}", file=sys.stderr)
+        try:
+            subprocess.run(["xdotool", "windowactivate", "--sync", wid], check=True, stderr=subprocess.DEVNULL)
+            time.sleep(0.15)
+        except Exception:
+            pass
+
+        subprocess.run(["import", "-window", wid, SNAP_FILE], check=True)
+
+        # Restore focus back to original terminal window
+        if orig_win:
+            try:
+                subprocess.run(["xdotool", "windowactivate", orig_win], stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+        return True
+    else:
+        subprocess.run(["import", "-window", "root", SNAP_FILE], check=True)
+        return True
+
+def capture_wayland():
+    if subprocess.run(["which", "grim"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        subprocess.run(["grim", SNAP_FILE], check=True)
+        return True
+    return False
+
+def capture_macos():
+    if sys.platform == "darwin":
+        subprocess.run(["screencapture", "-x", SNAP_FILE], check=True)
+        return True
+    return False
+
+def copy_to_clipboard(file_path):
+    try:
+        if subprocess.run(["which", "xclip"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["xclip", "-selection", "clipboard"], input=file_path.encode(), stderr=subprocess.DEVNULL)
+        elif subprocess.run(["which", "wl-copy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["wl-copy"], input=file_path.encode(), stderr=subprocess.DEVNULL)
+        elif subprocess.run(["which", "pbcopy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["pbcopy"], input=file_path.encode(), stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def main():
+    parser = argparse.ArgumentParser(description="Autonomous screenshot tool for AI agents")
+    parser.add_argument("--app", "-a", help="Specific app/window title to snap (e.g. 'chrome', 'firefox')")
+    parser.add_argument("--list", "-l", action="store_true", help="List available windows")
+    parser.add_argument("--active", action="store_true", help="Capture whatever is currently active without switching")
+    args = parser.parse_args()
+
+    if args.list:
+        wins = get_x11_windows()
+        print("Available windows:")
+        for wid, name in wins:
+            print(f"  {wid}: {name}")
+        return
+
+    success = False
+
+    if sys.platform == "darwin":
+        success = capture_macos()
+    elif os.environ.get("XDG_SESSION_TYPE") == "wayland" or os.environ.get("WAYLAND_DISPLAY"):
+        success = capture_wayland()
+    else:
+        target = None if args.active else find_target_window(args.app)
+        try:
+            success = capture_x11(target)
+        except Exception as e:
+            print(f"Failed direct capture, trying root window: {e}", file=sys.stderr)
+            try:
+                subprocess.run(["import", "-window", "root", SNAP_FILE], check=True)
+                success = True
+            except Exception:
+                success = False
+
+    if success and os.path.exists(SNAP_FILE):
+        copy_to_clipboard(SNAP_FILE)
+        # Output ONLY the file path to stdout for the agent to parse
+        print(SNAP_FILE)
+        sys.exit(0)
+    else:
+        print("ERROR: Failed to capture screenshot.", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

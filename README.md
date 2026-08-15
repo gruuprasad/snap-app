@@ -2,7 +2,7 @@
 
 A lightweight, zero-overhead agentic screenshot tool designed for AI coding agents (**Antigravity**, **Claude Code**, **Codex**, **Cursor**).
 
-Empowers your terminal and IDE agents to autonomously capture and inspect your application's visual state on demand—without tedious region selections, manual copy-pasting, or heavy MCP server setups.
+Empowers your terminal and IDE agents to autonomously capture and inspect your application's visual state on demand—**without countdowns, manual window switching, or user intervention**.
 
 ---
 
@@ -26,15 +26,15 @@ curl -fsSL https://raw.githubusercontent.com/gruuprasad/snap-app/main/install.sh
 
 ---
 
-## 🧠 How It Works
+## 🧠 Truly Autonomous (Zero User Interaction Required)
 
-Instead of configuring complex MCP daemons or servers:
-1. In **any** of your agents (Antigravity, Claude, Codex, Cursor), simply say:  
-   **"Look at the app and check the navbar spacing"**
-2. The agent executes `snap-app` in the background.
-3. The script announces a 3-second countdown on `stderr` (giving you time to focus your app window).
-4. It snaps the active window, saves it to a temporary location (`/tmp/agent-snaps/`), and prints the file path on `stdout`.
-5. The agent reads the generated image using its native file-viewing tools and immediately analyzes the visual state.
+Unlike traditional screenshot tools that require you to watch a countdown and manually Alt-Tab:
+1. You say to the agent: **"Look at the app and check the navbar spacing"**
+2. The agent executes `snap-app`.
+3. `snap-app` **auto-detects the app/browser window**, focuses it, captures the screenshot, and **instantly restores focus back to your terminal/IDE in ~0.2s**.
+4. The agent reads the generated image path and analyzes the visual state immediately.
+
+You don't need to be alert or switch windows.
 
 ---
 
